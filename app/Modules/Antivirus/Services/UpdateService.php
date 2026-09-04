@@ -27,7 +27,6 @@ class UpdateService
     protected function loadSources(): void
     {
         $this->sources = [
-            // ===== YARA Rules (منبع باز جهانی) =====
             'yara_rules' => [
                 'primary' => 'https://raw.githubusercontent.com/Yara-Rules/rules/master/',
                 'mirrors' => [
@@ -36,8 +35,6 @@ class UpdateService
                     'https://github.com/StamusNetworks/ELK-Rules/raw/main/',
                 ],
             ],
-            
-            // ===== ClamAV (منبع باز جهانی) =====
             'clamav' => [
                 'primary' => 'https://database.clamav.net/',
                 'mirrors' => [
@@ -45,14 +42,10 @@ class UpdateService
                     'https://db.local.clamav.net/',
                 ],
             ],
-            
-            // ===== VirusTotal (API جهانی) =====
             'virustotal' => [
                 'url' => 'https://www.virustotal.com/api/v3/',
                 'fallback' => 'https://www.virustotal.com/api/v2/',
             ],
-            
-            // ===== Abuse.ch (منبع باز جهانی) =====
             'abuse_ch' => [
                 'url' => 'https://bazaar.abuse.ch/',
                 'api' => 'https://mb-api.abuse.ch/api/v1/',
@@ -78,6 +71,59 @@ class UpdateService
             }
         }
     }
+
+    // =========================================================
+    // ===== متدهای بروزرسانی با Fallback خودکار =====
+    // =========================================================
+
+    /**
+     * بروزرسانی با Fallback خودکار (اولین منبع موفق)
+     */
+    public function updateWithFallback(): array
+    {
+        $sources = ['yara_rules', 'clamav', 'virustotal', 'abuse_ch'];
+        $results = [];
+        $updated = false;
+
+        foreach ($sources as $source) {
+            $result = $this->tryUpdateSource($source);
+            $results[$source] = $result;
+
+            if ($result['success']) {
+                $updated = true;
+                Log::info("Source {$source} updated successfully.");
+                break; // اگر یک منبع موفق بود، ادامه نده
+            }
+        }
+
+        if (!$updated) {
+            Log::warning("All update sources failed.");
+        }
+
+        return [
+            'success' => $updated,
+            'message' => $updated ? 'بروزرسانی با موفقیت انجام شد.' : 'تمام منابع بروزرسانی در دسترس نیستند.',
+            'sources' => $results,
+        ];
+    }
+
+    /**
+     * تلاش برای بروزرسانی از یک منبع خاص
+     */
+    protected function tryUpdateSource(string $source): array
+    {
+        return match ($source) {
+            'yara_rules' => $this->updateFromYara(),
+            'clamav' => $this->updateFromClamav(),
+            'virustotal' => $this->updateFromVirusTotal(),
+            'abuse_ch' => $this->updateFromAbuseCH(),
+            default => ['success' => false, 'message' => "Unknown source: {$source}", 'source' => $source],
+        };
+    }
+
+    // =========================================================
+    // ===== بروزرسانی از منابع مختلف =====
+    // =========================================================
 
     /**
      * بروزرسانی از YARA Rules با Fallback خودکار
@@ -105,11 +151,11 @@ class UpdateService
                     $localPath = $this->rulesPath . '/index.yar';
                     File::put($localPath, $response->body());
                     
-                    $this->parseYaraRules($localPath);
+                    $rules = $this->parseYaraRules($localPath);
                     
                     $result['success'] = true;
                     $result['message'] = "بروزرسانی از YARA Rules با موفقیت انجام شد. (منبع: " . ($index === 0 ? 'primary' : 'mirror') . ")";
-                    $result['updated'] = count($this->parseYaraRules($localPath));
+                    $result['updated'] = count($rules);
                     
                     Log::info("YARA rules updated from source: " . ($index === 0 ? 'primary' : 'mirror-' . $index));
                     break;
@@ -346,6 +392,199 @@ class UpdateService
         ];
     }
 
+    // =========================================================
+    // ===== بروزرسانی بر اساس منطقه جغرافیایی =====
+    // =========================================================
+
+    /**
+     * دریافت تعاریف بر اساس منطقه جغرافیایی
+     */
+    public function getRegionalDefinitions(string $region = 'global'): array
+    {
+        $regionalSources = [
+            'global' => 'https://raw.githubusercontent.com/Yara-Rules/rules/master/',
+            'us' => 'https://raw.githubusercontent.com/US-CERT/yara-rules/master/',
+            'eu' => 'https://raw.githubusercontent.com/EU-CERT/rules/master/',
+            'asia' => 'https://raw.githubusercontent.com/Asia-CERT/rules/master/',
+            'middle-east' => 'https://raw.githubusercontent.com/ME-CERT/rules/master/',
+        ];
+
+        $url = $regionalSources[$region] ?? $regionalSources['global'];
+        
+        // بروزرسانی از منبع منطقه‌ای
+        return $this->updateFromCustomSource($url);
+    }
+
+    /**
+     * بروزرسانی از منبع سفارشی
+     */
+    protected function updateFromCustomSource(string $url): array
+    {
+        $result = [
+            'success' => false,
+            'message' => '',
+            'updated' => 0,
+            'errors' => [],
+            'source' => 'custom',
+        ];
+
+        try {
+            $response = Http::timeout(30)->get($url . 'index.yar');
+
+            if ($response->successful()) {
+                $localPath = $this->rulesPath . '/custom_rules.yar';
+                File::put($localPath, $response->body());
+                
+                $rules = $this->parseYaraRules($localPath);
+                
+                $result['success'] = true;
+                $result['message'] = "بروزرسانی از منبع سفارشی با موفقیت انجام شد.";
+                $result['updated'] = count($rules);
+                
+                Log::info("Custom rules updated from: {$url}");
+            }
+        } catch (\Exception $e) {
+            $result['errors'][] = $e->getMessage();
+            Log::error('Custom source update failed: ' . $e->getMessage());
+        }
+
+        return $result;
+    }
+
+    // =========================================================
+    // ===== بروزرسانی‌های چندزبانه =====
+    // =========================================================
+
+    /**
+     * دریافت بروزرسانی‌های چندزبانه
+     */
+    public function getMultiLanguageUpdates(): array
+    {
+        $languages = ['en', 'fa', 'ar', 'zh', 'es', 'fr', 'de', 'ru'];
+        $results = [];
+        $totalUpdated = 0;
+
+        foreach ($languages as $lang) {
+            $url = "https://raw.githubusercontent.com/malware-rules/translations/{$lang}/rules.yar";
+            try {
+                $response = Http::timeout(10)->get($url);
+                if ($response->successful()) {
+                    $rules = $this->parseYaraRulesFromContent($response->body());
+                    $results[$lang] = [
+                        'success' => true,
+                        'count' => count($rules),
+                        'rules' => $rules,
+                    ];
+                    $totalUpdated += count($rules);
+                } else {
+                    $results[$lang] = [
+                        'success' => false,
+                        'message' => "Language rules {$lang} not available.",
+                    ];
+                }
+            } catch (\Exception $e) {
+                Log::warning("Language rules {$lang} not available: " . $e->getMessage());
+                $results[$lang] = [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return [
+            'success' => $totalUpdated > 0,
+            'message' => "بروزرسانی چندزبانه انجام شد. مجموع: {$totalUpdated} قانون.",
+            'languages' => $results,
+            'total_updated' => $totalUpdated,
+        ];
+    }
+
+    // =========================================================
+    // ===== بررسی وضعیت منابع =====
+    // =========================================================
+
+    /**
+     * دریافت وضعیت بروزرسانی از تمام منابع جهانی
+     */
+    public function getGlobalUpdateStatus(): array
+    {
+        $sources = [
+            'YARA Rules (Global)' => $this->checkSource('yara_rules'),
+            'YARA Rules (Mirror)' => $this->checkSource('yara_mirror'),
+            'ClamAV (Primary)' => $this->checkSource('clamav'),
+            'ClamAV (Mirror)' => $this->checkSource('clamav_mirror'),
+            'VirusTotal' => $this->checkSource('virustotal'),
+            'Abuse.ch' => $this->checkSource('abuse_ch'),
+            'US-CERT' => $this->checkSource('us_cert'),
+            'EU-CERT' => $this->checkSource('eu_cert'),
+        ];
+
+        return [
+            'sources' => $sources,
+            'last_global_update' => $this->getLastGlobalUpdate(),
+            'total_definitions' => VirusDefinition::count(),
+            'active_definitions' => VirusDefinition::where('is_active', true)->count(),
+        ];
+    }
+
+    /**
+     * بررسی وضعیت یک منبع
+     */
+    protected function checkSource(string $source): array
+    {
+        $sourceUrls = [
+            'yara_rules' => 'https://raw.githubusercontent.com/Yara-Rules/rules/master/index.yar',
+            'yara_mirror' => 'https://github.com/Yara-Rules/rules/raw/master/index.yar',
+            'clamav' => 'https://database.clamav.net/daily.cvd',
+            'clamav_mirror' => 'https://cdn.clamav.net/daily.cvd',
+            'virustotal' => 'https://www.virustotal.com/api/v3/',
+            'abuse_ch' => 'https://bazaar.abuse.ch/',
+            'us_cert' => 'https://raw.githubusercontent.com/US-CERT/yara-rules/master/index.yar',
+            'eu_cert' => 'https://raw.githubusercontent.com/EU-CERT/rules/master/index.yar',
+        ];
+
+        $url = $sourceUrls[$source] ?? null;
+        if (!$url) {
+            return ['available' => false, 'message' => 'Unknown source'];
+        }
+
+        try {
+            $response = Http::timeout(5)->head($url);
+            return [
+                'available' => $response->successful(),
+                'status_code' => $response->status(),
+                'message' => $response->successful() ? 'در دسترس' : 'در دسترس نیست',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'available' => false,
+                'message' => 'خطا در ارتباط: ' . $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * دریافت آخرین بروزرسانی جهانی
+     */
+    protected function getLastGlobalUpdate(): ?string
+    {
+        $logFile = storage_path('app/antivirus/logs/update.log');
+
+        if (!File::exists($logFile)) {
+            return null;
+        }
+
+        $content = File::get($logFile);
+        $lines = array_filter(explode("\n", $content));
+        $lastLine = end($lines);
+
+        return $lastLine ?: null;
+    }
+
+    // =========================================================
+    // ===== پردازش فایل‌های قوانین =====
+    // =========================================================
+
     /**
      * parse YARA rules file
      */
@@ -356,6 +595,14 @@ class UpdateService
         }
 
         $content = File::get($filePath);
+        return $this->parseYaraRulesFromContent($content);
+    }
+
+    /**
+     * parse YARA rules from content
+     */
+    protected function parseYaraRulesFromContent(string $content): array
+    {
         $rules = [];
         $pattern = '/rule\s+([a-zA-Z0-9_]+)\s*\{[^}]*?string\s*=\s*"([^"]+)"[^}]*?}/s';
         
@@ -382,6 +629,10 @@ class UpdateService
         }
         Log::info("CVD file processed: " . basename($filePath));
     }
+
+    // =========================================================
+    // ===== متدهای کمکی =====
+    // =========================================================
 
     /**
      * دریافت کلیدهای VirusTotal از تنظیمات
