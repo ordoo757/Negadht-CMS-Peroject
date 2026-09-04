@@ -11,13 +11,159 @@ class AiService
 {
     protected array $config;
     protected string $defaultProvider;
-    protected array $providers = ['openai', 'claude', 'local'];
+    protected string $activeProvider;
+    protected array $providers = ['openai', 'claude', 'ollama', 'local'];
+    protected array $providerStatus = [];
 
     public function __construct()
     {
         $this->config = config('modules.ai', []);
-        $this->defaultProvider = $this->config['default_provider'] ?? 'openai';
+        $this->defaultProvider = $this->config['default_provider'] ?? 'ollama';
+        $this->activeProvider = $this->determineActiveProvider();
     }
+
+    /**
+     * تعیین ارائه‌دهنده فعال بر اساس اولویت و دسترسی
+     */
+    protected function determineActiveProvider(): string
+    {
+        $preferredProviders = ['openai', 'claude', 'ollama', 'local'];
+        
+        foreach ($preferredProviders as $provider) {
+            if ($this->isProviderAvailable($provider)) {
+                Log::info("AI Provider selected: {$provider}");
+                return $provider;
+            }
+        }
+
+        return 'local';
+    }
+
+    /**
+     * بررسی در دسترس بودن هر ارائه‌دهنده
+     */
+    protected function isProviderAvailable(string $provider): bool
+    {
+        $cacheKey = "ai_provider_status_{$provider}";
+        if (Cache::has($cacheKey)) {
+            return Cache::get($cacheKey);
+        }
+
+        $available = false;
+
+        switch ($provider) {
+            case 'openai':
+                $available = $this->checkOpenAIAvailability();
+                break;
+            case 'claude':
+                $available = $this->checkClaudeAvailability();
+                break;
+            case 'ollama':
+                $available = $this->checkOllamaAvailability();
+                break;
+            case 'local':
+                $available = true;
+                break;
+        }
+
+        Cache::put($cacheKey, $available, now()->addMinutes(5));
+        
+        return $available;
+    }
+
+    /**
+     * بررسی دسترسی به OpenAI
+     */
+    protected function checkOpenAIAvailability(): bool
+    {
+        $apiKey = env('OPENAI_API_KEY');
+        if (empty($apiKey)) {
+            return false;
+        }
+
+        try {
+            $response = Http::timeout(5)
+                ->withHeaders(['Authorization' => 'Bearer ' . $apiKey])
+                ->get('https://api.openai.com/v1/models');
+
+            return $response->successful();
+        } catch (\Exception $e) {
+            Log::warning('OpenAI unavailable: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * بررسی دسترسی به Claude
+     */
+    protected function checkClaudeAvailability(): bool
+    {
+        $apiKey = env('CLAUDE_API_KEY');
+        if (empty($apiKey)) {
+            return false;
+        }
+
+        try {
+            $response = Http::timeout(5)
+                ->withHeaders([
+                    'x-api-key' => $apiKey,
+                    'anthropic-version' => '2023-06-01',
+                ])
+                ->get('https://api.anthropic.com/v1/messages');
+
+            return $response->successful();
+        } catch (\Exception $e) {
+            Log::warning('Claude unavailable: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * بررسی دسترسی به Ollama (محلی و رایگان)
+     */
+    protected function checkOllamaAvailability(): bool
+    {
+        $ollamaUrl = $this->config['ollama']['url'] ?? 'http://localhost:11434';
+        
+        try {
+            $response = Http::timeout(3)->get($ollamaUrl . '/api/tags');
+
+            if ($response->successful()) {
+                $models = $response->json();
+                if (!empty($models['models'])) {
+                    Log::info('Ollama is available with ' . count($models['models']) . ' models');
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (\Exception $e) {
+            Log::warning('Ollama unavailable: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * دریافت ارائه‌دهنده فعال
+     */
+    public function getActiveProvider(): string
+    {
+        return $this->activeProvider;
+    }
+
+    /**
+     * دریافت وضعیت تمام ارائه‌دهنده‌ها
+     */
+    public function getProviderStatus(): array
+    {
+        $status = [];
+        foreach ($this->providers as $provider) {
+            $status[$provider] = $this->isProviderAvailable($provider);
+        }
+        return $status;
+    }
+
+    // =============== متدهای اصلی ===============
 
     public function analyze(string $content, string $type = 'general'): array
     {
@@ -37,8 +183,6 @@ class AiService
         };
 
         Cache::put($cacheKey, $result, now()->addHours(1));
-
-        // Log AI activity
         $this->logActivity('analyze', $type, strlen($content));
 
         return $result;
@@ -46,12 +190,13 @@ class AiService
 
     public function generate(string $prompt, string $type = 'text'): array
     {
-        $provider = $this->getProvider();
+        $provider = $this->getActiveProvider();
 
         try {
             $response = match($provider) {
                 'openai' => $this->callOpenAI($prompt, $type),
                 'claude' => $this->callClaude($prompt, $type),
+                'ollama' => $this->callOllama($prompt, $type),
                 default => $this->callLocalAI($prompt, $type),
             };
 
@@ -61,15 +206,143 @@ class AiService
                 'success' => true,
                 'data' => $response,
                 'provider' => $provider,
+                'fallback_used' => ($provider !== $this->defaultProvider),
             ];
         } catch (\Exception $e) {
             Log::error('AI Generation failed: ' . $e->getMessage());
+            
+            if ($provider !== 'local') {
+                Log::info('Falling back to local AI');
+                return $this->generate($prompt, $type);
+            }
+            
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
+                'provider' => $provider,
             ];
         }
     }
+
+    // =============== متدهای فراخوانی API ===============
+
+    protected function callOpenAI(string $prompt, string $type): string
+    {
+        $apiKey = env('OPENAI_API_KEY');
+
+        if (!$apiKey) {
+            throw new \Exception('OpenAI API key not configured');
+        }
+
+        $response = Http::timeout(60)
+            ->withHeaders([
+                'Authorization' => 'Bearer ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+            ->post('https://api.openai.com/v1/chat/completions', [
+                'model' => $this->config['openai']['model'] ?? 'gpt-4',
+                'messages' => [
+                    ['role' => 'system', 'content' => 'You are a helpful assistant for a CMS system.'],
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+                'max_tokens' => $this->config['openai']['max_tokens'] ?? 2000,
+                'temperature' => 0.7,
+            ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('OpenAI API error: ' . $response->body());
+        }
+
+        return $response->json('choices.0.message.content') ?? '';
+    }
+
+    protected function callClaude(string $prompt, string $type): string
+    {
+        $apiKey = env('CLAUDE_API_KEY');
+
+        if (!$apiKey) {
+            throw new \Exception('Claude API key not configured');
+        }
+
+        $response = Http::timeout(60)
+            ->withHeaders([
+                'x-api-key' => $apiKey,
+                'Content-Type' => 'application/json',
+                'anthropic-version' => '2023-06-01',
+            ])
+            ->post('https://api.anthropic.com/v1/messages', [
+                'model' => $this->config['claude']['model'] ?? 'claude-3-opus-20240229',
+                'max_tokens' => $this->config['claude']['max_tokens'] ?? 2000,
+                'messages' => [
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+            ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('Claude API error: ' . $response->body());
+        }
+
+        return $response->json('content.0.text') ?? '';
+    }
+
+    /**
+     * فراخوانی Ollama (مدل محلی و رایگان)
+     */
+    protected function callOllama(string $prompt, string $type): string
+    {
+        $ollamaUrl = $this->config['ollama']['url'] ?? 'http://localhost:11434';
+        $model = $this->config['ollama']['model'] ?? 'llama2';
+
+        $response = Http::timeout(120)
+            ->post($ollamaUrl . '/api/generate', [
+                'model' => $model,
+                'prompt' => $prompt,
+                'stream' => false,
+                'options' => [
+                    'temperature' => 0.7,
+                    'num_predict' => $this->config['ollama']['max_tokens'] ?? 2000,
+                ],
+            ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('Ollama API error: ' . $response->body());
+        }
+
+        $data = $response->json();
+        return $data['response'] ?? '';
+    }
+
+    /**
+     * Fallback محلی (بدون نیاز به API)
+     */
+    protected function callLocalAI(string $prompt, string $type): string
+    {
+        if (class_exists(NlpService::class)) {
+            $nlp = new NlpService();
+            $summary = $nlp->summarize($prompt, 3);
+            return "Local AI Analysis:\n" . $summary . "\n\n[Processed locally without external API]";
+        }
+
+        $responses = [
+            'greeting' => 'سلام! من دستیار هوشمند شما هستم.',
+            'help' => 'می‌توانید از من برای تحلیل، تولید محتوا و مدیریت سیستم استفاده کنید.',
+            'default' => 'در حال حاضر به اینترنت دسترسی ندارم. لطفاً سوال خود را ساده‌تر بپرسید یا بعداً دوباره تلاش کنید.',
+        ];
+
+        $lowerPrompt = strtolower($prompt);
+        
+        if (str_contains($lowerPrompt, 'سلام') || str_contains($lowerPrompt, 'hello')) {
+            return $responses['greeting'];
+        }
+        
+        if (str_contains($lowerPrompt, 'کمک') || str_contains($lowerPrompt, 'help')) {
+            return $responses['help'];
+        }
+
+        return $responses['default'];
+    }
+
+    // =============== متدهای تحلیلی ===============
 
     public function monitorSystem(): array
     {
@@ -80,6 +353,8 @@ class AiService
             'active_users' => $this->getActiveUsers(),
             'failed_logins' => $this->getFailedLogins(),
             'suspicious_activities' => $this->getSuspiciousActivities(),
+            'active_provider' => $this->getActiveProvider(),
+            'provider_status' => $this->getProviderStatus(),
         ];
 
         $analysis = $this->analyzeSecurityMetrics($metrics);
@@ -94,8 +369,7 @@ class AiService
 
     public function smartMenuBuilder(array $context): array
     {
-        $prompt = "Based on the following context, generate an optimal menu structure:
-";
+        $prompt = "Based on the following context, generate an optimal menu structure:\n";
         $prompt .= json_encode($context, JSON_PRETTY_PRINT);
 
         $result = $this->generate($prompt, 'json');
@@ -109,8 +383,7 @@ class AiService
 
     public function smartFormBuilder(array $requirements): array
     {
-        $prompt = "Generate a form structure based on these requirements:
-";
+        $prompt = "Generate a form structure based on these requirements:\n";
         $prompt .= json_encode($requirements, JSON_PRETTY_PRINT);
 
         $result = $this->generate($prompt, 'json');
@@ -124,8 +397,7 @@ class AiService
 
     public function smartTemplateBuilder(array $preferences): array
     {
-        $prompt = "Generate a template structure based on these preferences:
-";
+        $prompt = "Generate a template structure based on these preferences:\n";
         $prompt .= json_encode($preferences, JSON_PRETTY_PRINT);
 
         $result = $this->generate($prompt, 'json');
@@ -145,14 +417,9 @@ class AiService
             return Cache::get($cacheKey);
         }
 
-        // Use AI for high-quality translation
         $prompt = "Translate the following text from {$sourceLang} to {$targetLang}. ";
-        $prompt .= "Maintain the tone, context, and any technical terms accurately.
-
-";
-        $prompt .= "Text: {$text}
-
-Translation:";
+        $prompt .= "Maintain the tone, context, and any technical terms accurately.\n\n";
+        $prompt .= "Text: {$text}\n\nTranslation:";
 
         $result = $this->generate($prompt, 'text');
 
@@ -170,7 +437,6 @@ Translation:";
         $threats = [];
         $score = 100;
 
-        // SQL Injection patterns
         $sqlPatterns = [
             '/(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER|CREATE)\b.*\b(FROM|INTO|TABLE|DATABASE)\b)/i',
             '/(--|#|\/\*|\*\/)/',
@@ -184,7 +450,6 @@ Translation:";
             }
         }
 
-        // XSS patterns
         $xssPatterns = [
             '/<script\b[^>]*>/i',
             '/javascript:/i',
@@ -253,7 +518,6 @@ Translation:";
         $issues = [];
 
         foreach ($lines as $lineNum => $line) {
-            // Check for common issues
             if (preg_match('/eval\s*\(/', $line)) {
                 $issues[] = ['line' => $lineNum + 1, 'issue' => 'Dangerous eval() usage', 'severity' => 'critical'];
             }
@@ -284,71 +548,7 @@ Translation:";
         ];
     }
 
-    protected function getProvider(): string
-    {
-        return $this->defaultProvider;
-    }
-
-    protected function callOpenAI(string $prompt, string $type): string
-    {
-        $apiKey = $this->config['openai_api_key'] ?? env('OPENAI_API_KEY');
-
-        if (!$apiKey) {
-            throw new \Exception('OpenAI API key not configured');
-        }
-
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . $apiKey,
-            'Content-Type' => 'application/json',
-        ])->post('https://api.openai.com/v1/chat/completions', [
-            'model' => $this->config['openai_model'] ?? 'gpt-4',
-            'messages' => [
-                ['role' => 'system', 'content' => 'You are a helpful assistant for a CMS system.'],
-                ['role' => 'user', 'content' => $prompt],
-            ],
-            'max_tokens' => 2000,
-            'temperature' => 0.7,
-        ]);
-
-        if ($response->successful()) {
-            return $response->json('choices.0.message.content');
-        }
-
-        throw new \Exception('OpenAI API error: ' . $response->body());
-    }
-
-    protected function callClaude(string $prompt, string $type): string
-    {
-        $apiKey = $this->config['claude_api_key'] ?? env('CLAUDE_API_KEY');
-
-        if (!$apiKey) {
-            throw new \Exception('Claude API key not configured');
-        }
-
-        $response = Http::withHeaders([
-            'x-api-key' => $apiKey,
-            'Content-Type' => 'application/json',
-            'anthropic-version' => '2023-06-01',
-        ])->post('https://api.anthropic.com/v1/messages', [
-            'model' => 'claude-3-opus-20240229',
-            'max_tokens' => 2000,
-            'messages' => [
-                ['role' => 'user', 'content' => $prompt],
-            ],
-        ]);
-
-        if ($response->successful()) {
-            return $response->json('content.0.text');
-        }
-
-        throw new \Exception('Claude API error: ' . $response->body());
-    }
-
-    protected function callLocalAI(string $prompt, string $type): string
-    {
-        // Local AI fallback using simple algorithms
-        return "Local AI processing: " . substr($prompt, 0, 100) . "... [Processed locally]";
-    }
+    // =============== متدهای کمکی ===============
 
     protected function getCpuUsage(): float
     {
@@ -462,7 +662,6 @@ Translation:";
             return 0;
         }
 
-        // Flesch Reading Ease
         $score = 206.835 - (1.015 * ($words / count($sentences))) - (84.6 * ($syllables / $words));
 
         return round(max(0, min(100, $score)), 2);
@@ -482,12 +681,11 @@ Translation:";
 
     protected function detectLanguage(string $text): string
     {
-        // Simple detection based on character ranges
         if (preg_match('/[\x{0600}-\x{06FF}]/u', $text)) {
-            return 'fa'; // Persian/Arabic
+            return 'fa';
         }
         if (preg_match('/[\x{0750}-\x{077F}]/u', $text)) {
-            return 'ar'; // Arabic
+            return 'ar';
         }
         return 'en';
     }
@@ -557,8 +755,34 @@ Translation:";
             'action' => $action,
             'type' => $type,
             'input_size' => $size,
-            'provider' => $this->getProvider(),
+            'provider' => $this->getActiveProvider(),
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * دریافت وضعیت کامل سیستم AI
+     */
+    public function getSystemStatus(): array
+    {
+        return [
+            'active_provider' => $this->getActiveProvider(),
+            'default_provider' => $this->defaultProvider,
+            'providers' => $this->getProviderStatus(),
+            'config' => [
+                'openai' => isset($this->config['openai']) ? 'configured' : 'not configured',
+                'claude' => isset($this->config['claude']) ? 'configured' : 'not configured',
+                'ollama' => isset($this->config['ollama']) ? 'configured' : 'not configured',
+            ],
+            'api_keys' => [
+                'openai' => env('OPENAI_API_KEY') ? 'set' : 'not set',
+                'claude' => env('CLAUDE_API_KEY') ? 'set' : 'not set',
+            ],
+            'ollama' => [
+                'url' => $this->config['ollama']['url'] ?? 'http://localhost:11434',
+                'model' => $this->config['ollama']['model'] ?? 'llama2',
+                'available' => $this->isProviderAvailable('ollama'),
+            ],
+        ];
     }
 }
