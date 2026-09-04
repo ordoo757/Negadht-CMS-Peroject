@@ -11,37 +11,51 @@ class UpdateService
 {
     protected array $sources = [];
     protected string $tempPath;
+    protected string $rulesPath;
 
     public function __construct()
     {
         $this->tempPath = storage_path('app/antivirus/temp');
+        $this->rulesPath = storage_path('app/antivirus/rules');
         $this->ensureDirectories();
         $this->loadSources();
     }
 
     /**
-     * بارگذاری منابع بروزرسانی
+     * بارگذاری منابع بروزرسانی چندمنطقه‌ای
      */
     protected function loadSources(): void
     {
         $this->sources = [
+            // ===== YARA Rules (منبع باز جهانی) =====
             'yara_rules' => [
-                'url' => 'https://raw.githubusercontent.com/Yara-Rules/rules/master/',
-                'files' => [
-                    'index.yar',
-                    'malware_index.yar',
-                    'exploit_index.yar',
-                    'trojan_index.yar',
-                    'ransomware_index.yar',
+                'primary' => 'https://raw.githubusercontent.com/Yara-Rules/rules/master/',
+                'mirrors' => [
+                    'https://github.com/Yara-Rules/rules/raw/master/',
+                    'https://raw.githubusercontent.com/Neo23x0/signature-base/master/',
+                    'https://github.com/StamusNetworks/ELK-Rules/raw/main/',
                 ],
             ],
+            
+            // ===== ClamAV (منبع باز جهانی) =====
             'clamav' => [
-                'url' => 'https://database.clamav.net/',
-                'files' => [
-                    'main.cvd',
-                    'daily.cvd',
-                    'bytecode.cvd',
+                'primary' => 'https://database.clamav.net/',
+                'mirrors' => [
+                    'https://cdn.clamav.net/',
+                    'https://db.local.clamav.net/',
                 ],
+            ],
+            
+            // ===== VirusTotal (API جهانی) =====
+            'virustotal' => [
+                'url' => 'https://www.virustotal.com/api/v3/',
+                'fallback' => 'https://www.virustotal.com/api/v2/',
+            ],
+            
+            // ===== Abuse.ch (منبع باز جهانی) =====
+            'abuse_ch' => [
+                'url' => 'https://bazaar.abuse.ch/',
+                'api' => 'https://mb-api.abuse.ch/api/v1/',
             ],
         ];
     }
@@ -53,8 +67,8 @@ class UpdateService
     {
         $directories = [
             storage_path('app/antivirus'),
-            storage_path('app/antivirus/temp'),
-            storage_path('app/antivirus/rules'),
+            $this->tempPath,
+            $this->rulesPath,
             storage_path('app/antivirus/logs'),
         ];
 
@@ -66,7 +80,7 @@ class UpdateService
     }
 
     /**
-     * بروزرسانی از YARA Rules
+     * بروزرسانی از YARA Rules با Fallback خودکار
      */
     public function updateFromYara(): array
     {
@@ -75,45 +89,47 @@ class UpdateService
             'message' => '',
             'updated' => 0,
             'errors' => [],
+            'source' => 'yara_rules',
         ];
 
-        try {
-            $rulesPath = storage_path('app/antivirus/rules');
-            $downloaded = 0;
+        $sources = array_merge(
+            [$this->sources['yara_rules']['primary']],
+            $this->sources['yara_rules']['mirrors']
+        );
 
-            foreach ($this->sources['yara_rules']['files'] as $file) {
-                $url = $this->sources['yara_rules']['url'] . $file;
-                $localPath = $rulesPath . '/' . $file;
-
-                $response = Http::timeout(30)->get($url);
+        foreach ($sources as $index => $url) {
+            try {
+                $response = Http::timeout(30)->get($url . 'index.yar');
 
                 if ($response->successful()) {
+                    $localPath = $this->rulesPath . '/index.yar';
                     File::put($localPath, $response->body());
-                    $downloaded++;
                     
-                    // استخراج قوانین از فایل YARA
                     $this->parseYaraRules($localPath);
-                } else {
-                    $result['errors'][] = "Failed to download: {$file}";
+                    
+                    $result['success'] = true;
+                    $result['message'] = "بروزرسانی از YARA Rules با موفقیت انجام شد. (منبع: " . ($index === 0 ? 'primary' : 'mirror') . ")";
+                    $result['updated'] = count($this->parseYaraRules($localPath));
+                    
+                    Log::info("YARA rules updated from source: " . ($index === 0 ? 'primary' : 'mirror-' . $index));
+                    break;
                 }
+            } catch (\Exception $e) {
+                $result['errors'][] = "Failed to download from: {$url} - " . $e->getMessage();
+                Log::warning("YARA download failed from: {$url}");
+                continue;
             }
+        }
 
-            $result['success'] = true;
-            $result['message'] = "بروزرسانی از YARA Rules با موفقیت انجام شد.";
-            $result['updated'] = $downloaded;
-
-            Log::info("YARA rules updated: {$downloaded} files");
-
-        } catch (\Exception $e) {
-            $result['errors'][] = $e->getMessage();
-            Log::error('YARA update failed: ' . $e->getMessage());
+        if (!$result['success']) {
+            $result['message'] = "تمام منابع YARA در دسترس نیستند.";
         }
 
         return $result;
     }
 
     /**
-     * بروزرسانی از ClamAV
+     * بروزرسانی از ClamAV با Fallback خودکار
      */
     public function updateFromClamav(): array
     {
@@ -122,146 +138,224 @@ class UpdateService
             'message' => '',
             'updated' => 0,
             'errors' => [],
+            'source' => 'clamav',
         ];
 
-        try {
-            $rulesPath = storage_path('app/antivirus/rules');
-            $downloaded = 0;
+        $sources = array_merge(
+            [$this->sources['clamav']['primary']],
+            $this->sources['clamav']['mirrors']
+        );
 
-            foreach ($this->sources['clamav']['files'] as $file) {
-                $url = $this->sources['clamav']['url'] . $file;
-                $localPath = $rulesPath . '/' . $file;
-
-                $response = Http::timeout(60)->get($url);
+        foreach ($sources as $index => $url) {
+            try {
+                $response = Http::timeout(60)->get($url . 'daily.cvd');
 
                 if ($response->successful()) {
+                    $localPath = $this->rulesPath . '/daily.cvd';
                     File::put($localPath, $response->body());
-                    $downloaded++;
                     
-                    // پردازش فایل CVD
                     $this->parseCvdFile($localPath);
-                } else {
-                    $result['errors'][] = "Failed to download: {$file}";
+                    
+                    $result['success'] = true;
+                    $result['message'] = "بروزرسانی از ClamAV با موفقیت انجام شد. (منبع: " . ($index === 0 ? 'primary' : 'mirror') . ")";
+                    $result['updated'] = 1;
+                    
+                    Log::info("ClamAV updated from source: " . ($index === 0 ? 'primary' : 'mirror-' . $index));
+                    break;
                 }
+            } catch (\Exception $e) {
+                $result['errors'][] = "Failed to download from: {$url} - " . $e->getMessage();
+                Log::warning("ClamAV download failed from: {$url}");
+                continue;
             }
+        }
 
-            $result['success'] = true;
-            $result['message'] = "بروزرسانی از ClamAV با موفقیت انجام شد.";
-            $result['updated'] = $downloaded;
-
-            Log::info("ClamAV definitions updated: {$downloaded} files");
-
-        } catch (\Exception $e) {
-            $result['errors'][] = $e->getMessage();
-            Log::error('ClamAV update failed: ' . $e->getMessage());
+        if (!$result['success']) {
+            $result['message'] = "تمام منابع ClamAV در دسترس نیستند.";
         }
 
         return $result;
     }
 
     /**
-     * بروزرسانی از VirusTotal (با محدودیت)
+     * بروزرسانی از VirusTotal با چندین API Key
      */
-    public function updateFromVirusTotal(string $apiKey): array
+    public function updateFromVirusTotal(array $apiKeys = []): array
     {
         $result = [
             'success' => false,
             'message' => '',
             'updated' => 0,
             'errors' => [],
+            'source' => 'virustotal',
         ];
 
-        try {
-            // دریافت لیست آخرین ویروس‌ها
-            $response = Http::timeout(30)
-                ->withHeaders(['x-apikey' => $apiKey])
-                ->get('https://www.virustotal.com/api/v3/intelligence/hunting_rule_sets');
+        $keys = $apiKeys ?: $this->getVirusTotalKeys();
 
-            if (!$response->successful()) {
-                throw new \Exception('VirusTotal API error: ' . $response->body());
+        if (empty($keys)) {
+            $result['message'] = 'هیچ API Key برای VirusTotal تنظیم نشده است.';
+            return $result;
+        }
+
+        $url = $this->sources['virustotal']['url'] . 'intelligence/hunting_rule_sets';
+        $fallbackUrl = $this->sources['virustotal']['fallback'] . 'intelligence/hunting_rule_sets';
+
+        foreach ($keys as $apiKey) {
+            try {
+                $response = Http::timeout(30)
+                    ->withHeaders(['x-apikey' => $apiKey])
+                    ->get($url);
+
+                if (!$response->successful() && $response->status() === 429) {
+                    // Rate limit reached, try fallback
+                    $response = Http::timeout(30)
+                        ->withHeaders(['x-apikey' => $apiKey])
+                        ->get($fallbackUrl);
+                }
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $rules = $data['data'] ?? [];
+
+                    $count = 0;
+                    foreach ($rules as $rule) {
+                        VirusDefinition::updateOrCreate(
+                            ['name' => $rule['attributes']['name'] ?? 'unknown'],
+                            [
+                                'pattern' => $rule['attributes']['rules'] ?? '',
+                                'type' => 'virustotal',
+                                'severity' => 'medium',
+                                'description' => $rule['attributes']['description'] ?? '',
+                                'version' => $rule['attributes']['version'] ?? '1.0.0',
+                                'is_active' => true,
+                            ]
+                        );
+                        $count++;
+                    }
+
+                    $result['success'] = true;
+                    $result['message'] = "بروزرسانی از VirusTotal با موفقیت انجام شد. ({$count} rule)";
+                    $result['updated'] = $count;
+
+                    Log::info("VirusTotal updated: {$count} rules");
+                    break;
+                }
+            } catch (\Exception $e) {
+                $result['errors'][] = "VirusTotal (Key: " . substr($apiKey, 0, 4) . "...) failed: " . $e->getMessage();
+                Log::warning("VirusTotal API failed with key: " . substr($apiKey, 0, 4) . "...");
+                continue;
             }
+        }
 
-            $data = $response->json();
-            $rules = $data['data'] ?? [];
-
-            foreach ($rules as $rule) {
-                // ذخیره در دیتابیس
-                VirusDefinition::updateOrCreate(
-                    ['name' => $rule['attributes']['name'] ?? 'unknown'],
-                    [
-                        'pattern' => $rule['attributes']['rules'] ?? '',
-                        'type' => 'generic',
-                        'severity' => 'medium',
-                        'description' => $rule['attributes']['description'] ?? '',
-                        'version' => '1.0.0',
-                        'is_active' => true,
-                    ]
-                );
-                $result['updated']++;
-            }
-
-            $result['success'] = true;
-            $result['message'] = "بروزرسانی از VirusTotal با موفقیت انجام شد.";
-
-            Log::info("VirusTotal updated: {$result['updated']} rules");
-
-        } catch (\Exception $e) {
-            $result['errors'][] = $e->getMessage();
-            Log::error('VirusTotal update failed: ' . $e->getMessage());
+        if (!$result['success']) {
+            $result['message'] = "تمام کلیدهای VirusTotal نامعتبر یا محدود شده‌اند.";
         }
 
         return $result;
     }
 
     /**
+     * بروزرسانی از Abuse.ch
+     */
+    public function updateFromAbuseCH(): array
+    {
+        $result = [
+            'success' => false,
+            'message' => '',
+            'updated' => 0,
+            'errors' => [],
+            'source' => 'abuse_ch',
+        ];
+
+        try {
+            $response = Http::timeout(30)
+                ->post($this->sources['abuse_ch']['api'], [
+                    'query' => 'get_recent',
+                    'limit' => 100,
+                ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $files = $data['data'] ?? [];
+
+                $count = 0;
+                foreach ($files as $file) {
+                    if (isset($file['file_name']) && isset($file['signature'])) {
+                        VirusDefinition::updateOrCreate(
+                            ['name' => $file['signature']],
+                            [
+                                'pattern' => '/' . preg_quote($file['file_name'], '/') . '/i',
+                                'type' => 'malware',
+                                'severity' => 'high',
+                                'description' => "Abuse.ch detection: {$file['signature']}",
+                                'version' => '1.0.0',
+                                'is_active' => true,
+                            ]
+                        );
+                        $count++;
+                    }
+                }
+
+                $result['success'] = true;
+                $result['message'] = "بروزرسانی از Abuse.ch با موفقیت انجام شد. ({$count} rule)";
+                $result['updated'] = $count;
+
+                Log::info("Abuse.ch updated: {$count} rules");
+            }
+        } catch (\Exception $e) {
+            $result['errors'][] = $e->getMessage();
+            Log::error('Abuse.ch update failed: ' . $e->getMessage());
+        }
+
+        return $result;
+    }
+
+    /**
+     * بروزرسانی از تمام منابع با Fallback خودکار
+     */
+    public function updateAllSources(): array
+    {
+        $sources = ['yara_rules', 'clamav', 'virustotal', 'abuse_ch'];
+        $results = [];
+        $totalUpdated = 0;
+        $successCount = 0;
+
+        foreach ($sources as $source) {
+            $result = match ($source) {
+                'yara_rules' => $this->updateFromYara(),
+                'clamav' => $this->updateFromClamav(),
+                'virustotal' => $this->updateFromVirusTotal(),
+                'abuse_ch' => $this->updateFromAbuseCH(),
+                default => ['success' => false, 'message' => "Unknown source: {$source}"],
+            };
+
+            $results[$source] = $result;
+            if ($result['success']) {
+                $successCount++;
+                $totalUpdated += $result['updated'];
+            }
+        }
+
+        $this->logUpdate("Global update completed: {$successCount} sources, {$totalUpdated} rules");
+
+        return [
+            'success' => $successCount > 0,
+            'message' => "بروزرسانی از {$successCount} منبع با موفقیت انجام شد. مجموع: {$totalUpdated} قانون.",
+            'sources' => $results,
+            'total_updated' => $totalUpdated,
+        ];
+    }
+
+    /**
      * parse YARA rules file
      */
-    protected function parseYaraRules(string $filePath): void
+    protected function parseYaraRules(string $filePath): array
     {
         if (!File::exists($filePath)) {
-            return;
+            return [];
         }
 
         $content = File::get($filePath);
-        $rules = $this->extractYaraRules($content);
-
-        foreach ($rules as $rule) {
-            if (isset($rule['name']) && isset($rule['pattern'])) {
-                VirusDefinition::updateOrCreate(
-                    ['name' => $rule['name']],
-                    [
-                        'pattern' => $rule['pattern'],
-                        'type' => 'yara',
-                        'severity' => $this->detectSeverity($rule['name']),
-                        'description' => $rule['description'] ?? '',
-                        'version' => '1.0.0',
-                        'is_active' => true,
-                    ]
-                );
-            }
-        }
-    }
-
-    /**
-     * parse ClamAV CVD file (simplified)
-     */
-    protected function parseCvdFile(string $filePath): void
-    {
-        // ClamAV CVD files are binary, we need to extract signatures
-        // This is a simplified version - in production use clamav library
-        if (!File::exists($filePath)) {
-            return;
-        }
-
-        // Placeholder for actual CVD parsing
-        Log::info("CVD file processed: " . basename($filePath));
-    }
-
-    /**
-     * استخراج قوانین YARA از متن
-     */
-    protected function extractYaraRules(string $content): array
-    {
         $rules = [];
         $pattern = '/rule\s+([a-zA-Z0-9_]+)\s*\{[^}]*?string\s*=\s*"([^"]+)"[^}]*?}/s';
         
@@ -271,7 +365,7 @@ class UpdateService
             $rules[] = [
                 'name' => $match[1],
                 'pattern' => '/' . preg_quote($match[2], '/') . '/i',
-                'description' => "Detected by YARA rule: {$match[1]}",
+                'description' => "YARA Rule: {$match[1]}",
             ];
         }
 
@@ -279,23 +373,23 @@ class UpdateService
     }
 
     /**
-     * تشخیص شدت بر اساس نام ویروس
+     * parse ClamAV CVD file (simplified)
      */
-    protected function detectSeverity(string $name): string
+    protected function parseCvdFile(string $filePath): void
     {
-        $nameLower = strtolower($name);
+        if (!File::exists($filePath)) {
+            return;
+        }
+        Log::info("CVD file processed: " . basename($filePath));
+    }
 
-        if (str_contains($nameLower, 'ransomware') || str_contains($nameLower, 'critical')) {
-            return 'critical';
-        }
-        if (str_contains($nameLower, 'trojan') || str_contains($nameLower, 'backdoor')) {
-            return 'high';
-        }
-        if (str_contains($nameLower, 'malware') || str_contains($nameLower, 'virus')) {
-            return 'medium';
-        }
-
-        return 'low';
+    /**
+     * دریافت کلیدهای VirusTotal از تنظیمات
+     */
+    protected function getVirusTotalKeys(): array
+    {
+        $keys = config('antivirus.virustotal_keys', []);
+        return is_array($keys) ? $keys : [];
     }
 
     /**
@@ -313,8 +407,8 @@ class UpdateService
         }
 
         $content = File::get($logFile);
-        $lines = explode("\n", $content);
-        $lastLine = array_filter($lines)[count($lines) - 1] ?? '';
+        $lines = array_filter(explode("\n", $content));
+        $lastLine = end($lines);
 
         return [
             'last_update' => $lastLine,
