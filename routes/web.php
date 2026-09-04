@@ -342,3 +342,7 @@ Route::middleware(['web', 'auth', 'admin'])
     // Module Routes (auto-loaded from modules)
     // These will be loaded by Module classes
 });
+
+// ===== Language =====
+Route::post('/language/switch', [App\Http\Controllers\LanguageController::class, 'switch'])->name('language.switch');
+Route::get('/language/current', [App\Http\Controllers\LanguageController::class, 'current'])->name('language.current');

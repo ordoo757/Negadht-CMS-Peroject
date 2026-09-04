@@ -155,3 +155,8 @@
     @stack('scripts')
 </body>
 </html>
+
+                {{-- Language Switcher --}}
+                <li class="nav-item">
+                    @include('components.language-switcher')
+                </li>
