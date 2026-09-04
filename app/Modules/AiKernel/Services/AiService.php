@@ -12,7 +12,7 @@ class AiService
     protected array $config;
     protected string $defaultProvider;
     protected string $activeProvider;
-    protected array $providers = ['openai', 'claude', 'ollama', 'local'];
+    protected array $providers = ['openai', 'claude', 'gemini', 'ollama', 'local'];
     protected array $providerStatus = [];
 
     public function __construct()
@@ -24,10 +24,11 @@ class AiService
 
     /**
      * تعیین ارائه‌دهنده فعال بر اساس اولویت و دسترسی
+     * اولویت: OpenAI -> Claude -> Gemini -> Ollama -> Local
      */
     protected function determineActiveProvider(): string
     {
-        $preferredProviders = ['openai', 'claude', 'ollama', 'local'];
+        $preferredProviders = ['openai', 'claude', 'gemini', 'ollama', 'local'];
         
         foreach ($preferredProviders as $provider) {
             if ($this->isProviderAvailable($provider)) {
@@ -57,6 +58,9 @@ class AiService
                 break;
             case 'claude':
                 $available = $this->checkClaudeAvailability();
+                break;
+            case 'gemini':
+                $available = $this->checkGeminiAvailability();
                 break;
             case 'ollama':
                 $available = $this->checkOllamaAvailability();
@@ -94,7 +98,7 @@ class AiService
     }
 
     /**
-     * بررسی دسترسی به Claude
+     * بررسی دسترسی به Claude (Anthropic)
      */
     protected function checkClaudeAvailability(): bool
     {
@@ -114,6 +118,27 @@ class AiService
             return $response->successful();
         } catch (\Exception $e) {
             Log::warning('Claude unavailable: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * بررسی دسترسی به Gemini (Google AI - رایگان با محدودیت)
+     */
+    protected function checkGeminiAvailability(): bool
+    {
+        $apiKey = env('GEMINI_API_KEY');
+        if (empty($apiKey)) {
+            return false;
+        }
+
+        try {
+            $response = Http::timeout(5)
+                ->get("https://generativelanguage.googleapis.com/v1/models?key={$apiKey}");
+
+            return $response->successful();
+        } catch (\Exception $e) {
+            Log::warning('Gemini unavailable: ' . $e->getMessage());
             return false;
         }
     }
@@ -196,6 +221,7 @@ class AiService
             $response = match($provider) {
                 'openai' => $this->callOpenAI($prompt, $type),
                 'claude' => $this->callClaude($prompt, $type),
+                'gemini' => $this->callGemini($prompt, $type),
                 'ollama' => $this->callOllama($prompt, $type),
                 default => $this->callLocalAI($prompt, $type),
             };
@@ -226,6 +252,9 @@ class AiService
 
     // =============== متدهای فراخوانی API ===============
 
+    /**
+     * فراخوانی OpenAI
+     */
     protected function callOpenAI(string $prompt, string $type): string
     {
         $apiKey = env('OPENAI_API_KEY');
@@ -256,6 +285,9 @@ class AiService
         return $response->json('choices.0.message.content') ?? '';
     }
 
+    /**
+     * فراخوانی Claude (Anthropic)
+     */
     protected function callClaude(string $prompt, string $type): string
     {
         $apiKey = env('CLAUDE_API_KEY');
@@ -283,6 +315,42 @@ class AiService
         }
 
         return $response->json('content.0.text') ?? '';
+    }
+
+    /**
+     * فراخوانی Gemini (Google AI - رایگان)
+     */
+    protected function callGemini(string $prompt, string $type): string
+    {
+        $apiKey = env('GEMINI_API_KEY');
+
+        if (!$apiKey) {
+            throw new \Exception('Gemini API key not configured');
+        }
+
+        $model = $this->config['gemini']['model'] ?? 'gemini-pro';
+
+        $response = Http::timeout(60)
+            ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$apiKey}", [
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt]
+                        ]
+                    ]
+                ],
+                'generationConfig' => [
+                    'temperature' => 0.7,
+                    'maxOutputTokens' => $this->config['gemini']['max_tokens'] ?? 2000,
+                ],
+            ]);
+
+        if (!$response->successful()) {
+            throw new \Exception('Gemini API error: ' . $response->body());
+        }
+
+        $data = $response->json();
+        return $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
     }
 
     /**
@@ -342,7 +410,7 @@ class AiService
         return $responses['default'];
     }
 
-    // =============== متدهای تحلیلی ===============
+    // =============== بقیه متدها ===============
 
     public function monitorSystem(): array
     {
@@ -431,6 +499,8 @@ class AiService
 
         return $text;
     }
+
+    // =============== متدهای تحلیلی ===============
 
     protected function analyzeSecurity(string $content): array
     {
@@ -772,11 +842,13 @@ class AiService
             'config' => [
                 'openai' => isset($this->config['openai']) ? 'configured' : 'not configured',
                 'claude' => isset($this->config['claude']) ? 'configured' : 'not configured',
+                'gemini' => isset($this->config['gemini']) ? 'configured' : 'not configured',
                 'ollama' => isset($this->config['ollama']) ? 'configured' : 'not configured',
             ],
             'api_keys' => [
                 'openai' => env('OPENAI_API_KEY') ? 'set' : 'not set',
                 'claude' => env('CLAUDE_API_KEY') ? 'set' : 'not set',
+                'gemini' => env('GEMINI_API_KEY') ? 'set' : 'not set',
             ],
             'ollama' => [
                 'url' => $this->config['ollama']['url'] ?? 'http://localhost:11434',

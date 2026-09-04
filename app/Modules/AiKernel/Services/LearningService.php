@@ -1,3 +1,4 @@
+
 <?php
 
 namespace App\Modules\AiKernel\Services;
@@ -10,6 +11,13 @@ class LearningService
 {
     protected array $patterns = [];
     protected float $learningRate = 0.1;
+
+    public function __construct()
+    {
+        // تنظیمات اولیه در صورت نیاز
+    }
+
+    // =============== متدهای اصلی ===============
 
     public function learnFromActivity(array $activity): void
     {
@@ -141,6 +149,8 @@ class LearningService
         ];
     }
 
+    // =============== متدهای داخلی ===============
+
     protected function extractPattern(array $activity): array
     {
         return [
@@ -248,7 +258,6 @@ class LearningService
 
     protected function recommendContent(array $profile): array
     {
-        // Based on user's common actions, recommend content
         $recommendations = [];
 
         foreach ($profile['common_actions'] ?? [] as $action) {
@@ -311,7 +320,7 @@ class LearningService
         foreach ($features as $i => $value) {
             $sum += ($weights[$i] ?? 0) * $value;
         }
-        return 1 / (1 + exp(-$sum)); // Sigmoid activation
+        return 1 / (1 + exp(-$sum));
     }
 
     protected function classifyUserAgent(string $userAgent): string
@@ -320,5 +329,74 @@ class LearningService
         if (str_contains($userAgent, 'Tablet')) return 'tablet';
         if (str_contains($userAgent, 'Bot')) return 'bot';
         return 'desktop';
+    }
+
+    // =============== متدهای جدید برای داشبورد ===============
+
+    /**
+     * دریافت آمار کلی کاربران برای داشبورد
+     */
+    public function getUserInsights(): array
+    {
+        $totalUsers = DB::table('users')->count();
+        $activeUsers = DB::table('ai_user_profiles')
+            ->where('updated_at', '>=', now()->subDays(7))
+            ->count();
+        $totalPatterns = DB::table('ai_learning_patterns')->count();
+        $commonActions = DB::table('ai_learning_patterns')
+            ->select('activity_type', DB::raw('COUNT(*) as count'))
+            ->groupBy('activity_type')
+            ->orderBy('count', 'desc')
+            ->limit(5)
+            ->get();
+
+        $anomalies = DB::table('ai_learning_patterns')
+            ->where('confidence', '<', 0.3)
+            ->where('frequency', '>', 5)
+            ->count();
+
+        return [
+            'total_users' => $totalUsers,
+            'active_users_7d' => $activeUsers,
+            'total_patterns' => $totalPatterns,
+            'common_actions' => $commonActions->toArray(),
+            'anomalies_detected' => $anomalies,
+            'learning_confidence' => $totalPatterns > 0 ? min(1.0, $totalPatterns / 1000) : 0,
+        ];
+    }
+
+    /**
+     * پاک کردن داده‌های قدیمی (بهینه‌سازی)
+     */
+    public function cleanOldData(int $days = 90): int
+    {
+        $deleted = DB::table('ai_learning_patterns')
+            ->where('last_seen', '<', now()->subDays($days))
+            ->delete();
+
+        Log::info("Cleaned {$deleted} old learning patterns");
+
+        return $deleted;
+    }
+
+    /**
+     * دریافت پیشنهادات هوشمند برای یک کاربر خاص
+     */
+    public function getSmartSuggestions(int $userId): array
+    {
+        $profile = $this->getUserProfile($userId);
+        $recommendations = $this->getRecommendations($userId, 'content');
+
+        // اولویت‌بندی بر اساس زمان
+        $hour = (int) date('G');
+        $preferredHours = $profile['preferred_hours'] ?? [];
+
+        usort($recommendations, function ($a, $b) use ($hour, $preferredHours) {
+            $aScore = in_array($hour, $preferredHours) ? 2 : 1;
+            $bScore = in_array($hour, $preferredHours) ? 2 : 1;
+            return $bScore <=> $aScore;
+        });
+
+        return array_slice($recommendations, 0, 5);
     }
 }
