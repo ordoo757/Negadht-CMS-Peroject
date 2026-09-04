@@ -3,6 +3,7 @@
 use App\Modules\Antivirus\Controllers\Admin\ScanController;
 use App\Modules\Antivirus\Controllers\Admin\ReportController;
 use App\Modules\Antivirus\Controllers\Admin\QuarantineController;
+use App\Modules\Antivirus\Controllers\Admin\VirusDefinitionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')
@@ -38,4 +39,19 @@ Route::prefix('admin')
         Route::get('/antivirus/quarantine', [QuarantineController::class, 'index'])->name('quarantine');
         Route::post('/antivirus/quarantine/{id}/restore', [QuarantineController::class, 'restore'])->name('quarantine-restore');
         Route::delete('/antivirus/quarantine/{id}', [QuarantineController::class, 'destroy'])->name('quarantine-delete');
+
+        // =========================================================
+        // ===== Virus Definitions =====
+        // =========================================================
+        Route::get('/antivirus/virus-definitions', [VirusDefinitionController::class, 'index'])->name('virus-definitions');
+        Route::get('/antivirus/virus-definitions/create', [VirusDefinitionController::class, 'create'])->name('virus-definitions.create');
+        Route::post('/antivirus/virus-definitions', [VirusDefinitionController::class, 'store'])->name('virus-definitions.store');
+        Route::get('/antivirus/virus-definitions/{id}/edit', [VirusDefinitionController::class, 'edit'])->name('virus-definitions.edit');
+        Route::put('/antivirus/virus-definitions/{id}', [VirusDefinitionController::class, 'update'])->name('virus-definitions.update');
+        Route::delete('/antivirus/virus-definitions/{id}', [VirusDefinitionController::class, 'destroy'])->name('virus-definitions.destroy');
+        Route::post('/antivirus/virus-definitions/{id}/toggle', [VirusDefinitionController::class, 'toggle'])->name('virus-definitions.toggle');
+
+        // Import / Export
+        Route::post('/antivirus/virus-definitions/import', [VirusDefinitionController::class, 'import'])->name('virus-definitions.import');
+        Route::get('/antivirus/virus-definitions/export', [VirusDefinitionController::class, 'export'])->name('virus-definitions.export');
     });
