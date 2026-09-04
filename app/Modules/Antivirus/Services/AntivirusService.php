@@ -171,3 +171,57 @@ class AntivirusService
         return $this->scanner->getStats();
     }
 }
+
+    /**
+     * بروزرسانی از YARA Rules
+     */
+    public function updateFromYara(): array
+    {
+        $updateService = new UpdateService();
+        $result = $updateService->updateFromYara();
+        
+        if ($result['success']) {
+            Log::info('Antivirus definitions updated from YARA');
+        }
+        
+        return $result;
+    }
+
+    /**
+     * بروزرسانی از ClamAV
+     */
+    public function updateFromClamav(): array
+    {
+        $updateService = new UpdateService();
+        $result = $updateService->updateFromClamav();
+        
+        if ($result['success']) {
+            Log::info('Antivirus definitions updated from ClamAV');
+        }
+        
+        return $result;
+    }
+
+    /**
+     * بروزرسانی از VirusTotal
+     */
+    public function updateFromVirusTotal(string $apiKey): array
+    {
+        $updateService = new UpdateService();
+        $result = $updateService->updateFromVirusTotal($apiKey);
+        
+        if ($result['success']) {
+            Log::info('Antivirus definitions updated from VirusTotal');
+        }
+        
+        return $result;
+    }
+
+    /**
+     * دریافت وضعیت بروزرسانی
+     */
+    public function getUpdateStatus(): array
+    {
+        $updateService = new UpdateService();
+        return $updateService->getLastUpdateStatus();
+    }

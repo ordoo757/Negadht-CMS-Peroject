@@ -55,3 +55,9 @@ Route::prefix('admin')
         Route::post('/antivirus/virus-definitions/import', [VirusDefinitionController::class, 'import'])->name('virus-definitions.import');
         Route::get('/antivirus/virus-definitions/export', [VirusDefinitionController::class, 'export'])->name('virus-definitions.export');
     });
+
+        // ===== Update =====
+        Route::post('/antivirus/update/yara', [UpdateController::class, 'updateFromYara'])->name('update-yara');
+        Route::post('/antivirus/update/clamav', [UpdateController::class, 'updateFromClamav'])->name('update-clamav');
+        Route::post('/antivirus/update/virustotal', [UpdateController::class, 'updateFromVirusTotal'])->name('update-virustotal');
+        Route::get('/antivirus/update/status', [UpdateController::class, 'status'])->name('update-status');

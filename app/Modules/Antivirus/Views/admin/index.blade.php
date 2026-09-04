@@ -149,3 +149,77 @@
     </div>
 </div>
 @endsection
+    {{-- بروزرسانی تعاریف --}}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card card-primary">
+                <div class="card-header">
+                    <h5 class="card-title">بروزرسانی تعاریف ویروس</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <form method="POST" action="{{ route('admin.antivirus.update-yara') }}">
+                                @csrf
+                                <button type="submit" class="btn btn-warning btn-block">
+                                    <i class="fas fa-sync"></i> بروزرسانی از YARA Rules
+                                </button>
+                                <small class="text-muted">منبع: YARA Rules (رایگان)</small>
+                            </form>
+                        </div>
+                        <div class="col-md-4">
+                            <form method="POST" action="{{ route('admin.antivirus.update-clamav') }}">
+                                @csrf
+                                <button type="submit" class="btn btn-info btn-block">
+                                    <i class="fas fa-database"></i> بروزرسانی از ClamAV
+                                </button>
+                                <small class="text-muted">منبع: ClamAV (رایگان)</small>
+                            </form>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-success btn-block" data-toggle="modal" data-target="#virusTotalModal">
+                                <i class="fas fa-cloud-upload-alt"></i> بروزرسانی از VirusTotal
+                            </button>
+                            <small class="text-muted">منبع: VirusTotal (نیاز به API Key)</small>
+                        </div>
+                    </div>
+
+                    @if(isset($updateStatus))
+                        <div class="mt-3">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> {{ $updateStatus['message'] ?? 'وضعیت بروزرسانی نامشخص است.' }}
+                            </div>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Modal VirusTotal --}}
+    <div class="modal fade" id="virusTotalModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" action="{{ route('admin.antivirus.update-virustotal') }}">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title">بروزرسانی از VirusTotal</h5>
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>API Key <span class="text-danger">*</span></label>
+                            <input type="text" name="api_key" class="form-control" placeholder="VirusTotal API Key" required>
+                            <small class="text-muted">
+                                <a href="https://www.virustotal.com/gui/join-us" target="_blank">دریافت API Key</a>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">انصراف</button>
+                        <button type="submit" class="btn btn-success">بروزرسانی</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
