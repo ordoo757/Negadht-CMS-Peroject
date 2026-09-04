@@ -1,0 +1,1 @@
+@props(['icon' => 'activity', 'value' => '0', 'label' => '', 'color' => 'primary']) <div class='card-stat'> <div class='card-stat-icon'> <i data-lucide='{{ $icon }}'></i> </div> <div class='card-stat-info'> <h3>{{ $value }}</h3> <p>{{ $label }}</p> </div> </div>
