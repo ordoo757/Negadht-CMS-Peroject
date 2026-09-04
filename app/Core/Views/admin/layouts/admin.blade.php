@@ -160,3 +160,20 @@
                 <li class="nav-item">
                     @include('components.language-switcher')
                 </li>
+
+        {{-- Footer Copyright --}}
+        <footer class="main-footer">
+            <div class="float-right d-none d-sm-block">
+                <b>NeuroCMS</b> {{ config('app.version', '2.0.0') }}
+            </div>
+            <strong>
+                &copy; 2026 <a href="https://github.com/ordoo757" target="_blank">Hooman Oliaei (هومان اولیائی)</a>.
+            </strong>
+            <span class="text-muted">
+                تمامی حقوق محفوظ است.
+            </span>
+            <br>
+            <small class="text-muted">
+                توسعه‌یافته با بهره‌گیری از <a href="https://deepseek.com" target="_blank">DeepSeek AI</a>
+            </small>
+        </footer>

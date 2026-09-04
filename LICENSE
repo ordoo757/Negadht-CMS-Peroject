@@ -1,0 +1,110 @@
+                    GNU GENERAL PUBLIC LICENSE
+                       Version 3, 29 June 2007
+
+ Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+ Everyone is permitted to copy and distribute verbatim copies
+ of this license document, but changing it is not allowed.
+
+                            Preamble
+
+  The GNU General Public License is a free, copyleft license for
+software and other kinds of works.
+
+  The licenses for most software and other practical works are designed
+to take away your freedom to share and change the works.  By contrast,
+the GNU General Public License is intended to guarantee your freedom to
+share and change all versions of a program--to make sure it remains free
+software for all its users.
+
+=============================================================================
+                    NeuroCMS - GNU General Public License v3.0
+=============================================================================
+
+Copyright (c) 2026 Hooman Oliaei (هومان اولیائی)
+
+All rights reserved.
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+=============================================================================
+                            ADDITIONAL TERMS
+=============================================================================
+
+1. Attribution Requirement:
+   - Any use, distribution, or modification of this software must retain
+     the original copyright notice and attribution to Hooman Oliaei
+     (هومان اولیائی) in all source code files, documentation, and user interfaces.
+
+2. No Removal of Copyright:
+   - Users and developers are NOT permitted to remove, alter, or obscure
+     the copyright notice, author name, or any attribution information
+     from any part of the software, including but not limited to:
+     * Source code files
+     * Documentation
+     * User interfaces (Admin Panel, Public Pages)
+     * Footer notices
+     * About pages
+
+3. Derivative Works:
+   - Any derivative work must include clear attribution to the original
+     author (Hooman Oliaei) and must state that the work is based on
+     NeuroCMS.
+
+4. Commercial Use:
+   - Commercial use is permitted under the terms of the GPL v3 license.
+   - However, attribution must remain intact in all commercial products.
+
+5. Warranty Disclaimer:
+   - This software is provided "AS IS", without warranty of any kind,
+     express or implied.
+
+6. Liability:
+   - In no event shall the authors or copyright holders be liable for
+     any claim, damages, or other liability arising from the use of
+     this software.
+
+=============================================================================
+                    CONTACT INFORMATION
+=============================================================================
+
+Author: Hooman Oliaei (هومان اولیائی)
+Email: hoazadir@gmail.com
+GitHub: https://github.com/ordoo757
+
+Project Repository: https://github.com/ordoo757/Negadht-CMS-Peroject
+
+=============================================================================
+                    ACKNOWLEDGMENTS
+=============================================================================
+
+This project was developed using:
+- Laravel Framework (https://laravel.com)
+- Various open-source packages and libraries
+
+Special thanks to:
+- The open-source community for their invaluable contributions
+- All contributors and users of NeuroCMS
+
+=============================================================================
+                    FINAL NOTE
+=============================================================================
+
+By using, modifying, or distributing this software, you agree to:
+1. Comply with the terms of the GNU General Public License v3.0
+2. Maintain all copyright notices and attributions
+3. Not remove or alter the author's name (Hooman Oliaei) from any part
+   of the software
+4. Acknowledge the original author in any derivative works
+
+=============================================================================
