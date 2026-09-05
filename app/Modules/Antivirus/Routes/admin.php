@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * NeuroCMS - Content Management System
+ *
+ * @author     Hooman Oliaei (هومان اولیائی)
+ * @copyright  Copyright (c) 2026 Hooman Oliaei
+ * @license    GNU General Public License v3.0
+ * @link       https://github.com/ordoo757
+ */
+<?php
+
 use App\Modules\Antivirus\Controllers\Admin\ScanController;
 use App\Modules\Antivirus\Controllers\Admin\ReportController;
 use App\Modules\Antivirus\Controllers\Admin\QuarantineController;

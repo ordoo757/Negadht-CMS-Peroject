@@ -1,1 +1,11 @@
+<?php
+
+/**
+ * NeuroCMS - Content Management System
+ *
+ * @author     Hooman Oliaei (هومان اولیائی)
+ * @copyright  Copyright (c) 2026 Hooman Oliaei
+ * @license    GNU General Public License v3.0
+ * @link       https://github.com/ordoo757
+ */
 <?php namespace AppCoreHelpers; class MenuBuilder { protected static array $menu = []; public static function loadFromConfig(): array { $config = require base_path('config/admin-menu.php'); self::$menu = $config['sections'] ?? []; uasort(self::$menu, fn($a, $b) => ($a['priority'] ?? 999) <=> ($b['priority'] ?? 999)); return self::$menu; } public static function register(string $section, array $item): void { if (!isset(self::$menu[$section])) { self::$menu[$section] = ['label' => $section, 'icon' => 'circle', 'priority' => 999, 'items' => []]; } self::$menu[$section]['items'][] = $item; } public static function get(): array { if (empty(self::$menu)) { self::loadFromConfig(); } return self::$menu; } public static function render(): array { return self::get(); } }

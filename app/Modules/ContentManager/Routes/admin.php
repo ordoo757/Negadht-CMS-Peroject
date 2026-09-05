@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * NeuroCMS - Content Management System
+ *
+ * @author     Hooman Oliaei (هومان اولیائی)
+ * @copyright  Copyright (c) 2026 Hooman Oliaei
+ * @license    GNU General Public License v3.0
+ * @link       https://github.com/ordoo757
+ */
+<?php
+
 use App\Modules\ContentManager\Controllers\Admin\PageController;
 use App\Modules\ContentManager\Controllers\Admin\CategoryController;
 use App\Modules\ContentManager\Controllers\Admin\MediaController;

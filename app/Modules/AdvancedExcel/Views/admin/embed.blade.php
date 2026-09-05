@@ -1,3 +1,13 @@
+<?php
+
+/**
+ * NeuroCMS - Content Management System
+ *
+ * @author     Hooman Oliaei (هومان اولیائی)
+ * @copyright  Copyright (c) 2026 Hooman Oliaei
+ * @license    GNU General Public License v3.0
+ * @link       https://github.com/ordoo757
+ */
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>

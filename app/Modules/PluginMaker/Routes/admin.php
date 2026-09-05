@@ -1,5 +1,15 @@
 <?php
 
+/**
+ * NeuroCMS - Content Management System
+ *
+ * @author     Hooman Oliaei (هومان اولیائی)
+ * @copyright  Copyright (c) 2026 Hooman Oliaei
+ * @license    GNU General Public License v3.0
+ * @link       https://github.com/ordoo757
+ */
+<?php
+
 use App\Modules\PluginMaker\Controllers\Admin\PluginController;
 use Illuminate\Support\Facades\Route;
 
