@@ -1,0 +1,404 @@
+/* ============================================================
+   NeuroCMS Installer Styles
+   ============================================================ */
+
+:root {
+    --primary-color: #4f46e5;
+    --primary-dark: #4338ca;
+    --success-color: #22c55e;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --info-color: #3b82f6;
+}
+
+body {
+    font-family: 'Vazirmatn', 'Inter', sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+/* ===== Container ===== */
+.installer-container {
+    max-width: 900px;
+    margin: 30px auto;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== Header ===== */
+.installer-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: #ffffff;
+    padding: 25px 30px;
+}
+
+.installer-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.installer-title small {
+    font-size: 14px;
+    font-weight: 400;
+    opacity: 0.8;
+    margin-left: 10px;
+}
+
+.installer-title i {
+    margin-right: 10px;
+}
+
+/* ===== Progress Bar ===== */
+.installer-progress {
+    background: #f8f9fa;
+    padding: 20px 30px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.progress-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.step-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    background: #e9ecef;
+    color: #6c757d;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 2;
+}
+
+.step-item.active .step-circle {
+    background: var(--primary-color);
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+}
+
+.step-item.completed .step-circle {
+    background: var(--success-color);
+    color: #ffffff;
+}
+
+.step-label {
+    font-size: 10px;
+    margin-top: 5px;
+    color: #6c757d;
+    text-align: center;
+}
+
+.step-item.active .step-label {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.step-item.completed .step-label {
+    color: var(--success-color);
+}
+
+.step-line {
+    flex: 1;
+    height: 2px;
+    background: #dee2e6;
+    margin: 0 -5px;
+    position: relative;
+    z-index: 1;
+}
+
+.step-line.completed {
+    background: var(--success-color);
+}
+
+/* ===== Content ===== */
+.installer-content {
+    padding: 30px;
+    min-height: 400px;
+}
+
+.step-container {
+    animation: fadeIn 0.3s ease;
+}
+
+.step-header {
+    margin-bottom: 25px;
+}
+
+.step-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin: 0;
+}
+
+.step-header p {
+    color: #6c757d;
+    margin: 5px 0 0;
+}
+
+.step-body {
+    margin-bottom: 25px;
+}
+
+.step-footer {
+    padding-top: 20px;
+    border-top: 1px solid #e9ecef;
+}
+
+/* ===== Form ===== */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: #333;
+}
+
+.form-group .text-danger {
+    color: var(--danger-color);
+}
+
+.form-control {
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    padding: 10px 15px;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-control.is-invalid {
+    border-color: var(--danger-color);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* ===== Buttons ===== */
+.btn {
+    border-radius: 8px;
+    padding: 10px 25px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #ffffff;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+.btn-success {
+    background: var(--success-color);
+    border-color: var(--success-color);
+    color: #ffffff;
+}
+
+.btn-success:hover {
+    background: #16a34a;
+    border-color: #16a34a;
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background: #6c757d;
+    border-color: #6c757d;
+    color: #ffffff;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+    border-color: #5a6268;
+}
+
+.btn-info {
+    background: var(--info-color);
+    border-color: var(--info-color);
+    color: #ffffff;
+}
+
+.btn-info:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.btn-next {
+    min-width: 120px;
+}
+
+.btn-install {
+    min-width: 150px;
+    font-size: 18px;
+    padding: 12px 35px;
+}
+
+/* ===== Alerts ===== */
+.alert {
+    border-radius: 8px;
+    border: none;
+}
+
+.alert-success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.alert-danger {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.alert-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.alert-info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* ===== Footer ===== */
+.installer-footer {
+    background: #f8f9fa;
+    padding: 20px 30px;
+    border-top: 1px solid #e9ecef;
+    text-align: center;
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.installer-footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+.installer-footer a:hover {
+    text-decoration: underline;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+    .installer-container {
+        margin: 15px;
+        border-radius: 12px;
+    }
+
+    .installer-header {
+        padding: 15px 20px;
+    }
+
+    .installer-title {
+        font-size: 18px;
+    }
+
+    .installer-title small {
+        font-size: 12px;
+    }
+
+    .installer-progress {
+        padding: 15px 20px;
+        overflow-x: auto;
+    }
+
+    .step-label {
+        font-size: 8px;
+    }
+
+    .step-circle {
+        width: 28px;
+        height: 28px;
+        font-size: 11px;
+    }
+
+    .installer-content {
+        padding: 20px;
+    }
+
+    .modules-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    .btn {
+        padding: 8px 15px;
+        font-size: 14px;
+    }
+
+    .btn-install {
+        font-size: 16px;
+        padding: 10px 25px;
+        min-width: 120px;
+    }
+}
+
+/* ===== Password Strength ===== */
+.password-strength .progress {
+    height: 5px;
+    border-radius: 10px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.password-strength .progress-bar {
+    transition: width 0.3s ease;
+}
+
+/* ===== Spinner ===== */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.2em;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c7cd;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a0a7ae;
+}
